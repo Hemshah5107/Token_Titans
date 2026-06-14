@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Code Review · Multi-Agent System</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0a0a0f;
+  --paper: #f4f1ea;
+  --paper2: #ede9df;
+  --paper3: #e5e0d4;
+  --rule: #d4cfc4;
+  --manager-c: #1a1a2e;
+  --quality-c: #0f3460;
+  --edge-c: #533483;
+  --senior-c: #1b4332;
+  --manager-a: #4f9cf9;
+  --quality-a: #f97316;
+  --edge-a: #a78bfa;
+  --senior-a: #34d399;
+  --danger: #dc2626;
+  --warn: #d97706;
+  --info: #2563eb;
+  --pass: #16a34a;
+  --text-primary: #1a1a1a;
+  --text-secondary: #5a5650;
+  --text-muted: #9a948a;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Geist', sans-serif;
+  background: var(--paper);
+  color: var(--text-primary);
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Grain texture */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0; opacity: 0.6;
+}
+
+.wrap { position:relative; z-index:1; max-width:1320px; margin:0 auto; padding:32px 24px; }
+
+/* ── Header ── */
+header {
+  display:flex; align-items:flex-end; justify-content:space-between;
+  padding-bottom: 28px;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 32px;
+}
+.brand {
+  display:flex; flex-direction:column; gap:4px;
+}
+.brand-title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 2rem; line-height:1; letter-spacing:-0.03em;
+  color: var(--ink);
+}
+.brand-title em { font-style:italic; color: var(--quality-a); }
+.brand-sub {
+  font-size: 0.7rem; letter-spacing:0.12em; text-transform:uppercase;
+  color: var(--text-muted); font-weight:500;
+}
+.header-right { display:flex; align-items:center; gap:12px; }
+.model-chip {
+  font-size: 0.65rem; letter-spacing:0.08em; text-transform:uppercase;
+  border: 1px solid var(--rule); border-radius:20px;
+  padding: 5px 12px; color: var(--text-secondary);
+  background: var(--paper2);
+}
+.live-dot {
+  width:8px; height:8px; border-radius:50%;
+  background: var(--pass); animation: pulse-dot 2s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(52,211,153,0.4);
+}
+@keyframes pulse-dot {
+  0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0.4)}
+  50%{box-shadow:0 0 0 6px rgba(52,211,153,0)}
+}
+
+/* ── Layout ── */
+.layout { display:grid; grid-template-columns: 360px 1fr; gap:24px; align-items:start; }
+
+/* ── Input panel ── */
+.input-panel {
+  background: white;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  overflow:hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  position: sticky; top: 24px;
+}
+.panel-head {
+  padding:14px 18px;
+  border-bottom: 1px solid var(--rule);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.panel-head-label {
+  font-size:0.68rem; font-weight:600; letter-spacing:0.1em;
+  text-transform:uppercase; color: var(--text-secondary);
+}
+.panel-body { padding:16px; display:flex; flex-direction:column; gap:14px; }
+
+.form-group { display:flex; flex-direction:column; gap:6px; }
+.form-label {
+  font-size:0.65rem; font-weight:600; letter-spacing:0.08em;
+  text-transform:uppercase; color: var(--text-muted);
+}
+
+.code-editor {
+  width:100%; min-height: 240px;
+  background: #0d1117; color: #e6edf3;
+  border: 1px solid var(--rule); border-radius:10px;
+  font-family: 'DM Mono', monospace; font-size:0.72rem;
+  line-height: 1.7; padding:14px; resize:vertical;
+  outline:none; transition: border-color 0.2s;
+}
+.code-editor:focus { border-color: var(--quality-a); }
+
+.select-field {
+  width:100%; padding:9px 12px;
+  background:white; border:1px solid var(--rule);
+  border-radius:8px; color:var(--text-primary);
+  font-family:'Geist', sans-serif; font-size:0.78rem;
+  outline:none; cursor:pointer; transition:border-color 0.2s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a948a' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position: right 10px center;
+  padding-right: 32px;
+}
+.select-field:focus { border-color: var(--quality-a); }
+
+/* Agent toggle grid */
+.agent-toggles {
+  display:grid; grid-template-columns:1fr 1fr; gap:8px;
+}
+.agent-toggle {
+  border: 1.5px solid var(--rule); border-radius:10px;
+  padding: 10px 12px; cursor:pointer;
+  transition: all 0.2s; display:flex; align-items:center; gap:8px;
+  background: white;
+}
+.agent-toggle.on-manager { border-color:var(--manager-a); background: rgba(79,156,249,0.06); }
+.agent-toggle.on-quality { border-color:var(--quality-a); background: rgba(249,115,22,0.06); }
+.agent-toggle.on-edge { border-color:var(--edge-a); background: rgba(167,139,250,0.06); }
+.agent-toggle.on-senior { border-color:var(--senior-a); background: rgba(52,211,153,0.06); }
+.agent-toggle-icon { font-size:1rem; }
+.agent-toggle-info { flex:1; }
+.agent-toggle-name { font-size:0.68rem; font-weight:600; }
+.agent-toggle-role { font-size:0.58rem; color:var(--text-muted); margin-top:1px; }
+.agent-toggle-check {
+  width:16px; height:16px; border-radius:4px;
+  border:1.5px solid var(--rule); display:flex;
+  align-items:center; justify-content:center; flex-shrink:0;
+  transition:all 0.15s;
+}
+.agent-toggle.on-manager .agent-toggle-check { background:var(--manager-a); border-color:var(--manager-a); }
+.agent-toggle.on-quality .agent-toggle-check { background:var(--quality-a); border-color:var(--quality-a); }
+.agent-toggle.on-edge .agent-toggle-check { background:var(--edge-a); border-color:var(--edge-a); }
+.agent-toggle.on-senior .agent-toggle-check { background:var(--senior-a); border-color:var(--senior-a); }
+.check-svg { width:10px; height:10px; display:none; }
+.agent-toggle[class*="on-"] .check-svg { display:block; }
+
+/* Run button */
+.run-btn {
+  width:100%; padding:13px;
+  background: var(--ink); color: white;
+  border:none; border-radius:10px;
+  font-family:'Geist',sans-serif; font-size:0.85rem; font-weight:600;
+  cursor:pointer; transition: all 0.2s;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  letter-spacing:-0.01em;
+}
+.run-btn:hover:not(:disabled) {
+  background: #2d2d2d;
+  transform:translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.run-btn:disabled { opacity:0.5; cursor:not-allowed; }
+.run-btn.running { background: var(--quality-a); animation: btn-glow 1.5s ease-in-out infinite; }
+@keyframes btn-glow {
+  0%,100%{box-shadow:0 0 0 0 rgba(249,115,22,0.3)}
+  50%{box-shadow:0 0 0 8px rgba(249,115,22,0)}
+}
+.run-icon { font-size:1rem; }
+
+.reset-btn {
+  width:100%; padding:10px;
+  background: transparent; color:var(--text-muted);
+  border:1px solid var(--rule); border-radius:10px;
+  font-family:'Geist',sans-serif; font-size:0.78rem; font-weight:500;
+  cursor:pointer; transition: all 0.2s; display:none;
+}
+.reset-btn:hover { background: var(--paper2); color:var(--text-primary); }
+
+/* Progress */
+.progress-bar {
+  height:3px; background:var(--rule); border-radius:2px; overflow:hidden;
+}
+.progress-fill {
+  height:100%; width:0;
+  background: linear-gradient(90deg, var(--quality-a), var(--edge-a));
+  transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+  border-radius:2px;
+}
+
+/* ── Right column ── */
+.right-col { display:flex; flex-direction:column; gap:20px; }
+
+/* ── Agent cards ── */
+.agents-row {
+  display:grid; grid-template-columns: repeat(4,1fr); gap:12px;
+}
+.agent-card {
+  background:white; border:1px solid var(--rule); border-radius:14px;
+  overflow:hidden; transition: all 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.agent-card.active-manager { border-color:var(--manager-a); box-shadow:0 0 0 3px rgba(79,156,249,0.15), 0 4px 20px rgba(79,156,249,0.1); }
+.agent-card.active-quality { border-color:var(--quality-a); box-shadow:0 0 0 3px rgba(249,115,22,0.15), 0 4px 20px rgba(249,115,22,0.1); }
+.agent-card.active-edge { border-color:var(--edge-a); box-shadow:0 0 0 3px rgba(167,139,250,0.15), 0 4px 20px rgba(167,139,250,0.1); }
+.agent-card.active-senior { border-color:var(--senior-a); box-shadow:0 0 0 3px rgba(52,211,153,0.15), 0 4px 20px rgba(52,211,153,0.1); }
+.agent-card.done-manager { border-color:rgba(79,156,249,0.4); }
+.agent-card.done-quality { border-color:rgba(249,115,22,0.4); }
+.agent-card.done-edge { border-color:rgba(167,139,250,0.4); }
+.agent-card.done-senior { border-color:rgba(52,211,153,0.4); }
+
+.agent-card-head {
+  padding:12px 14px; display:flex; align-items:center; gap:8px;
+}
+.agent-avatar {
+  width:32px; height:32px; border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:1rem; flex-shrink:0;
+}
+.av-manager { background:rgba(79,156,249,0.12); }
+.av-quality { background:rgba(249,115,22,0.12); }
+.av-edge { background:rgba(167,139,250,0.12); }
+.av-senior { background:rgba(52,211,153,0.12); }
+.agent-meta { flex:1; min-width:0; }
+.agent-name { font-size:0.72rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.agent-role { font-size:0.58rem; color:var(--text-muted); }
+.agent-status-pill {
+  font-size:0.55rem; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;
+  padding:3px 7px; border-radius:20px; white-space:nowrap;
+  background:var(--paper2); color:var(--text-muted);
+  transition: all 0.3s;
+}
+.agent-status-pill.thinking-manager { background:rgba(79,156,249,0.12); color:var(--manager-a); animation:thinking 1.5s ease-in-out infinite; }
+.agent-status-pill.thinking-quality { background:rgba(249,115,22,0.12); color:var(--quality-a); animation:thinking 1.5s ease-in-out infinite; }
+.agent-status-pill.thinking-edge { background:rgba(167,139,250,0.12); color:var(--edge-a); animation:thinking 1.5s ease-in-out infinite; }
+.agent-status-pill.thinking-senior { background:rgba(52,211,153,0.12); color:var(--senior-a); animation:thinking 1.5s ease-in-out infinite; }
+.agent-status-pill.done { background:rgba(22,163,74,0.1); color:var(--pass); }
+@keyframes thinking { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+.agent-output {
+  padding:0 14px 12px; min-height:60px;
+  font-size:0.66rem; line-height:1.7; color:var(--text-secondary);
+  font-family:'DM Mono', monospace;
+  max-height: 120px; overflow-y:auto; word-break:break-word;
+}
+.agent-output::-webkit-scrollbar { width:3px; }
+.agent-output::-webkit-scrollbar-thumb { background:var(--rule); border-radius:2px; }
+.agent-output .placeholder { color:var(--text-muted); font-style:italic; }
+.typing-cursor {
+  display:inline-block; width:2px; height:12px;
+  background:currentColor; margin-left:1px; vertical-align:middle;
+  animation: blink-c 0.8s step-end infinite;
+}
+@keyframes blink-c { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* ── Debate panel ── */
+.debate-panel {
+  background:white; border:1px solid var(--rule); border-radius:14px;
+  overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.05);
+}
+.debate-head {
+  padding:14px 18px; border-bottom:1px solid var(--rule);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.debate-head-label {
+  font-size:0.68rem; font-weight:600; letter-spacing:0.1em;
+  text-transform:uppercase; color:var(--text-secondary);
+  display:flex; align-items:center; gap:8px;
+}
+.debate-round-badge {
+  font-size:0.6rem; padding:3px 8px; border-radius:20px;
+  background:var(--paper2); color:var(--text-muted);
+}
+.debate-body { padding:16px; display:flex; flex-direction:column; gap:10px; }
+
+.debate-msg {
+  display:flex; gap:10px; align-items:flex-start;
+  opacity:0.25; transition:opacity 0.4s;
+}
+.debate-msg.active { opacity:1; }
+.debate-avatar {
+  width:28px; height:28px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:0.8rem;
+}
+.dm-quality { background:rgba(249,115,22,0.12); }
+.dm-edge { background:rgba(167,139,250,0.12); }
+.dm-senior { background:rgba(52,211,153,0.12); }
+.debate-bubble {
+  flex:1; padding:10px 12px; border-radius:10px;
+  font-size:0.68rem; line-height:1.65; font-family:'DM Mono', monospace;
+}
+.db-quality { background:rgba(249,115,22,0.06); border:1px solid rgba(249,115,22,0.15); color:var(--text-primary); }
+.db-edge { background:rgba(167,139,250,0.06); border:1px solid rgba(167,139,250,0.15); color:var(--text-primary); }
+.db-senior { background:rgba(52,211,153,0.06); border:1px solid rgba(52,211,153,0.15); color:var(--text-primary); }
+.debate-bubble-tag { font-size:0.58rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; margin-bottom:4px; }
+.dt-quality { color:var(--quality-a); }
+.dt-edge { color:var(--edge-a); }
+.dt-senior { color:var(--senior-a); }
+
+/* ── Report ── */
+.report-panel {
+  background:white; border:1px solid var(--rule); border-radius:14px;
+  overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.05);
+}
+.report-tabs { display:flex; border-bottom:1px solid var(--rule); }
+.rtab {
+  padding:12px 18px; font-size:0.68rem; font-weight:600;
+  letter-spacing:0.05em; text-transform:uppercase; cursor:pointer;
+  color:var(--text-muted); border-bottom:2px solid transparent;
+  margin-bottom:-1px; transition:all 0.2s;
+}
+.rtab.active { color:var(--text-primary); border-bottom-color:var(--ink); }
+.rtab-content { display:none; }
+.rtab-content.active { display:block; }
+
+.report-body { padding:16px; display:flex; flex-direction:column; gap:10px; }
+.empty-state {
+  text-align:center; padding:48px 20px;
+  color:var(--text-muted); font-size:0.72rem; line-height:2;
+}
+.empty-icon { font-size:2.5rem; margin-bottom:8px; opacity:0.4; }
+
+/* Summary bar */
+.summary-bar {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
+  padding:16px; border-bottom:1px solid var(--rule);
+}
+.stat-card {
+  text-align:center; padding:10px;
+  border-radius:10px; border:1px solid var(--rule);
+  background:var(--paper);
+}
+.stat-num { font-family:'Instrument Serif',serif; font-size:1.8rem; line-height:1; }
+.stat-label { font-size:0.58rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); margin-top:2px; }
+.sc-critical .stat-num { color:var(--danger); }
+.sc-warning .stat-num { color:var(--warn); }
+.sc-info .stat-num { color:var(--info); }
+.sc-passed .stat-num { color:var(--pass); }
+
+/* Finding card */
+.finding-card {
+  border:1px solid var(--rule); border-radius:10px;
+  overflow:hidden; animation:slide-up 0.3s ease;
+}
+@keyframes slide-up {
+  from{opacity:0; transform:translateY(8px)}
+  to{opacity:1; transform:translateY(0)}
+}
+.finding-card.fc-critical { border-left:3px solid var(--danger); }
+.finding-card.fc-warning { border-left:3px solid var(--warn); }
+.finding-card.fc-info { border-left:3px solid var(--info); }
+.finding-card.fc-passed { border-left:3px solid var(--pass); }
+
+.finding-head {
+  padding:10px 14px; display:flex; align-items:center; gap:8px;
+  cursor:pointer; user-select:none;
+}
+.finding-badge {
+  font-size:0.58rem; font-weight:700; letter-spacing:0.08em;
+  text-transform:uppercase; padding:3px 8px; border-radius:4px;
+  flex-shrink:0;
+}
+.fb-critical { background:rgba(220,38,38,0.1); color:var(--danger); }
+.fb-warning { background:rgba(217,119,6,0.1); color:var(--warn); }
+.fb-info { background:rgba(37,99,235,0.1); color:var(--info); }
+.fb-passed { background:rgba(22,163,74,0.1); color:var(--pass); }
+
+.finding-title { font-size:0.72rem; font-weight:600; flex:1; }
+.finding-agent { font-size:0.6rem; color:var(--text-muted); margin-left:auto; flex-shrink:0; }
+.finding-expand { font-size:0.7rem; color:var(--text-muted); transition:transform 0.2s; }
+.finding-card.open .finding-expand { transform:rotate(180deg); }
+.finding-body {
+  display:none; padding:0 14px 12px;
+  font-size:0.68rem; line-height:1.75; color:var(--text-secondary);
+  border-top:1px solid var(--rule); padding-top:10px;
+}
+.finding-card.open .finding-body { display:block; }
+.finding-code {
+  margin-top:8px; padding:10px 12px;
+  background:#0d1117; color:#e6edf3;
+  border-radius:8px; font-family:'DM Mono',monospace;
+  font-size:0.65rem; line-height:1.7; white-space:pre-wrap;
+}
+.finding-debate {
+  margin-top:10px; padding:10px 12px;
+  background:var(--paper); border-radius:8px;
+  border:1px solid var(--rule);
+}
+.finding-debate-title { font-size:0.58rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; }
+.debate-line { font-size:0.63rem; line-height:1.6; margin-bottom:4px; }
+.dl-quality { color:var(--quality-a); }
+.dl-edge { color:var(--edge-a); }
+.dl-senior { color:var(--senior-a); }
+
+/* Metrics */
+.metrics-grid {
+  display:grid; grid-template-columns:repeat(2,1fr); gap:12px; padding:16px;
+}
+.metric-card {
+  padding:14px; border-radius:10px;
+  background:var(--paper); border:1px solid var(--rule);
+}
+.metric-title { font-size:0.62rem; color:var(--text-muted); font-weight:500; letter-spacing:0.04em; margin-bottom:6px; }
+.metric-value { font-family:'Instrument Serif',serif; font-size:1.5rem; color:var(--text-primary); }
+.metric-bar { height:4px; background:var(--rule); border-radius:2px; margin-top:8px; overflow:hidden; }
+.metric-fill { height:100%; border-radius:2px; transition: width 1s cubic-bezier(0.4,0,0.2,1); }
+
+/* Scrollbars */
+.report-body::-webkit-scrollbar { width:4px; }
+.report-body::-webkit-scrollbar-thumb { background:var(--rule); border-radius:2px; }
+
+/* Responsive */
+@media(max-width:1024px) {
+  .layout { grid-template-columns:1fr; }
+  .input-panel { position:static; }
+  .agents-row { grid-template-columns:repeat(2,1fr); }
+}
+@media(max-width:600px) {
+  .agents-row { grid-template-columns:1fr; }
+  .summary-bar { grid-template-columns:repeat(2,1fr); }
+}
+
+/* Scrolling text effect */
+.stream-text { word-break:break-word; }
+
+/* Toast */
+.toast {
+  position:fixed; bottom:24px; right:24px; z-index:1000;
+  padding:12px 18px; border-radius:10px;
+  background:var(--ink); color:white;
+  font-size:0.72rem; font-weight:500;
+  transform:translateY(80px); opacity:0;
+  transition:all 0.3s cubic-bezier(0.4,0,0.2,1);
+  max-width:300px; line-height:1.5;
+  box-shadow:0 8px 24px rgba(0,0,0,0.2);
+}
+.toast.show { transform:translateY(0); opacity:1; }
+.toast.error { background:var(--danger); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="brand-title">Code Review <em>Intelligence</em></div>
+      <div class="brand-sub">Defensively-Oriented Multi-Agent System · Real AI Analysis</div>
+    </div>
+    <div class="header-right">
+      <div class="model-chip">Dynamic AI Model</div>
+      <div class="live-dot"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="input-panel">
+      <div class="panel-head">
+        <div class="panel-head-label">Repository Input</div>
+        <div style="font-size:0.6rem; color:var(--text-muted)">Paste code to analyze</div>
+      </div>
+      <div class="panel-body">
+
+        <div class="form-group">
+          <label class="form-label">Language</label>
+          <select class="select-field" id="langSel">
+            <option value="Python">Python</option>
+            <option value="JavaScript">JavaScript</option>
+            <option value="Java">Java</option>
+            <option value="TypeScript">TypeScript</option>
+            <option value="Go">Go</option>
+            <option value="Rust">Rust</option>
+            <option value="C++">C++</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Code</label>
+          <textarea class="code-editor" id="codeInput" spellcheck="false">def process_user_data(users):
+    result = []
+    for i in range(len(users)):
+        user = users[i]
+        data = {}
+        data['name'] = user['name']
+        data['email'] = user['email']
+        if user['age'] > 18:
+            data['status'] = 'adult'
+        result.append(data)
+    total = 0
+    for item in result:
+        total = total + 1
+    return result, total
+
+def find_user(user_list, target):
+    for i in range(len(user_list)):
+        for j in range(len(user_list)):
+            if user_list[i]['name'] == target:
+                return user_list[i]
+    return None
+
+def calculate_discount(price, user_type):
+    if user_type == 'premium':
+        discount = price * 0.2
+    elif user_type == 'regular':
+        discount = price * 0.1
+    final = price - discount
+    return final</textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Active Agents</label>
+          <div class="agent-toggles">
+            <div class="agent-toggle on-manager" id="toggle-manager" onclick="toggleAgent('manager')">
+              <div class="agent-avatar av-manager agent-toggle-icon">🧠</div>
+              <div class="agent-toggle-info">
+                <div class="agent-toggle-name" style="color:var(--manager-a)">Manager</div>
+                <div class="agent-toggle-role">Orchestrator</div>
+              </div>
+              <div class="agent-toggle-check">
+                <svg class="check-svg" viewBox="0 0 10 10" fill="none"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+            <div class="agent-toggle on-quality" id="toggle-quality" onclick="toggleAgent('quality')">
+              <div class="agent-avatar av-quality agent-toggle-icon">🔬</div>
+              <div class="agent-toggle-info">
+                <div class="agent-toggle-name" style="color:var(--quality-a)">Quality</div>
+                <div class="agent-toggle-role">Lint & Standards</div>
+              </div>
+              <div class="agent-toggle-check">
+                <svg class="check-svg" viewBox="0 0 10 10" fill="none"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+            <div class="agent-toggle on-edge" id="toggle-edge" onclick="toggleAgent('edge')">
+              <div class="agent-avatar av-edge agent-toggle-icon">⚡</div>
+              <div class="agent-toggle-info">
+                <div class="agent-toggle-name" style="color:var(--edge-a)">Edge Case</div>
+                <div class="agent-toggle-role">Bugs & Risks</div>
+              </div>
+              <div class="agent-toggle-check">
+                <svg class="check-svg" viewBox="0 0 10 10" fill="none"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+            <div class="agent-toggle on-senior" id="toggle-senior" onclick="toggleAgent('senior')">
+              <div class="agent-avatar av-senior agent-toggle-icon">⚖️</div>
+              <div class="agent-toggle-info">
+                <div class="agent-toggle-name" style="color:var(--senior-a)">Senior</div>
+                <div class="agent-toggle-role">Synthesizer</div>
+              </div>
+              <div class="agent-toggle-check">
+                <svg class="check-svg" viewBox="0 0 10 10" fill="none"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Review Depth</label>
+          <select class="select-field" id="depthSel">
+            <option value="quick">Quick Scan</option>
+            <option value="standard" selected>Standard Review</option>
+            <option value="deep">Deep Analysis</option>
+          </select>
+        </div>
+
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <button class="run-btn" id="runBtn" onclick="runPipeline()">
+          <span class="run-icon">▶</span>
+          <span id="runBtnText">Launch AI Pipeline</span>
+        </button>
+        <button class="reset-btn" id="resetBtn" onclick="resetAll()">↺ Reset Pipeline</button>
+      </div>
+    </div>
+
+    <div class="right-col">
+
+      <div class="agents-row">
+        <div class="agent-card" id="card-manager">
+          <div class="agent-card-head">
+            <div class="agent-avatar av-manager">🧠</div>
+            <div class="agent-meta">
+              <div class="agent-name">Manager Agent</div>
+              <div class="agent-role">Orchestrator</div>
+            </div>
+            <div class="agent-status-pill" id="pill-manager">Idle</div>
+          </div>
+          <div class="agent-output" id="out-manager">
+            <span class="placeholder">Waiting for input...</span>
+          </div>
+        </div>
+        <div class="agent-card" id="card-quality">
+          <div class="agent-card-head">
+            <div class="agent-avatar av-quality">🔬</div>
+            <div class="agent-meta">
+              <div class="agent-name">Quality Agent</div>
+              <div class="agent-role">Standards & Complexity</div>
+            </div>
+            <div class="agent-status-pill" id="pill-quality">Idle</div>
+          </div>
+          <div class="agent-output" id="out-quality">
+            <span class="placeholder">Waiting for tasks...</span>
+          </div>
+        </div>
+        <div class="agent-card" id="card-edge">
+          <div class="agent-card-head">
+            <div class="agent-avatar av-edge">⚡</div>
+            <div class="agent-meta">
+              <div class="agent-name">Edge Agent</div>
+              <div class="agent-role">Bugs & Runtime Risks</div>
+            </div>
+            <div class="agent-status-pill" id="pill-edge">Idle</div>
+          </div>
+          <div class="agent-output" id="out-edge">
+            <span class="placeholder">Waiting for tasks...</span>
+          </div>
+        </div>
+        <div class="agent-card" id="card-senior">
+          <div class="agent-card-head">
+            <div class="agent-avatar av-senior">⚖️</div>
+            <div class="agent-meta">
+              <div class="agent-name">Senior Reviewer</div>
+              <div class="agent-role">Synthesizer & Gatekeeper</div>
+            </div>
+            <div class="agent-status-pill" id="pill-senior">Idle</div>
+          </div>
+          <div class="agent-output" id="out-senior">
+            <span class="placeholder">Awaiting sub-agent results...</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="debate-panel" id="debatePanel">
+        <div class="debate-head">
+          <div class="debate-head-label">
+            ⚡ Consensus Debate
+            <span class="debate-round-badge" id="roundBadge">Round 0</span>
+          </div>
+          <div style="font-size:0.62rem; color:var(--text-muted)">Proposition → Critique → Synthesis</div>
+        </div>
+        <div class="debate-body">
+          <div class="debate-msg" id="dmsg-prop">
+            <div class="debate-avatar dm-quality">🔬</div>
+            <div class="debate-bubble db-quality">
+              <div class="debate-bubble-tag dt-quality">Quality Agent · Proposition</div>
+              <div id="d-prop-text" class="stream-text">Waiting for findings to debate...</div>
+            </div>
+          </div>
+          <div class="debate-msg" id="dmsg-crit">
+            <div class="debate-avatar dm-edge">⚡</div>
+            <div class="debate-bubble db-edge">
+              <div class="debate-bubble-tag dt-edge">Edge Agent · Critique</div>
+              <div id="d-crit-text" class="stream-text">Waiting for proposition...</div>
+            </div>
+          </div>
+          <div class="debate-msg" id="dmsg-synth">
+            <div class="debate-avatar dm-senior">⚖️</div>
+            <div class="debate-bubble db-senior">
+              <div class="debate-bubble-tag dt-senior">Senior Reviewer · Synthesis</div>
+              <div id="d-synth-text" class="stream-text">Awaiting debate to synthesize...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="report-panel" id="reportPanel">
+        <div class="report-tabs">
+          <div class="rtab active" onclick="switchTab('findings')">Findings</div>
+          <div class="rtab" onclick="switchTab('debate')">Debate Log</div>
+          <div class="rtab" onclick="switchTab('metrics')">Metrics</div>
+        </div>
+        <div id="rfindings" class="rtab-content active">
+          <div id="summaryBar" style="display:none" class="summary-bar">
+            <div class="stat-card sc-critical"><div class="stat-num" id="cnt-critical">0</div><div class="stat-label">Critical</div></div>
+            <div class="stat-card sc-warning"><div class="stat-num" id="cnt-warning">0</div><div class="stat-label">Warning</div></div>
+            <div class="stat-card sc-info"><div class="stat-num" id="cnt-info">0</div><div class="stat-label">Info</div></div>
+            <div class="stat-card sc-passed"><div class="stat-num" id="cnt-passed">0</div><div class="stat-label">Passed</div></div>
+          </div>
+          <div class="report-body" id="reportBody">
+            <div class="empty-state">
+              <div class="empty-icon">📋</div>
+              No findings yet.<br>Launch the pipeline to begin<br>AI-powered code analysis.
+            </div>
+          </div>
+        </div>
+        <div id="rdebate" class="rtab-content">
+          <div class="report-body" id="debateLogBody">
+            <div class="empty-state"><div class="empty-icon">💬</div>Debate log will appear here.</div>
+          </div>
+        </div>
+        <div id="rmetrics" class="rtab-content">
+          <div id="metricsBody">
+            <div class="empty-state"><div class="empty-icon">📊</div>Metrics will appear after analysis.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// Dynamic API Configuration & Mock Engine
+// ─────────────────────────────────────────────
+const API_URL = "YOUR_API_ENDPOINT_HERE"; 
+const API_KEY = "YOUR_API_KEY_HERE";
+const API_MODEL = "YOUR_MODEL_NAME_HERE";
+
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+let activeAgents = { manager:true, quality:true, edge:true, senior:true };
+let running = false;
+let findings = [];
+let debateLog = [];
+let counts = { critical:0, warning:0, info:0, passed:0 };
+
+function toggleAgent(id) {
+  if (running) return;
+  activeAgents[id] = !activeAgents[id];
+  const el = document.getElementById('toggle-' + id);
+  if (activeAgents[id]) el.className = `agent-toggle on-${id}`;
+  else el.className = 'agent-toggle';
+}
+
+function setProgress(pct) {
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function toast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3500);
+}
+
+function setAgentState(id, state) {
+  const card = document.getElementById('card-' + id);
+  const pill = document.getElementById('pill-' + id);
+  if (!card) return;
+  card.className = 'agent-card';
+  pill.className = 'agent-status-pill';
+  if (state === 'thinking') {
+    card.classList.add('active-' + id);
+    pill.classList.add('thinking-' + id);
+    pill.textContent = 'Thinking…';
+  } else if (state === 'done') {
+    card.classList.add('done-' + id);
+    pill.classList.add('done');
+    pill.textContent = 'Done ✓';
+  } else {
+    pill.textContent = 'Idle';
+  }
+}
+
+function streamToAgent(id, text) {
+  const el = document.getElementById('out-' + id);
+  el.innerHTML = '';
+  let i = 0;
+  const cursor = document.createElement('span');
+  cursor.className = 'typing-cursor';
+  el.appendChild(cursor);
+
+  return new Promise(resolve => {
+    function next() {
+      if (i < text.length) {
+        cursor.insertAdjacentText('beforebegin', text[i++]);
+        el.scrollTop = el.scrollHeight;
+        setTimeout(next, 12);
+      } else {
+        cursor.remove();
+        resolve();
+      }
+    }
+    next();
+  });
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─────────────────────────────────────────────
+// Robust Dynamic API Handler (with Mock Fallback)
+// ─────────────────────────────────────────────
+async function callDynamicAPI(systemPrompt, userMsg) {
+  // Mock Engine Fallback: Makes the UI dynamic even if API keys are missing.
+  if (API_KEY === "YOUR_API_KEY_HERE" || !API_KEY) {
+    await delay(1200); 
+    if (systemPrompt.includes('Manager Agent')) return "I am orchestrating a structural review for this code, dispatching layout checks to Quality and runtime bounds to the Edge agent.";
+    if (systemPrompt.includes('Quality & Standards')) return JSON.stringify([{"severity":"warning","title":"Missing Type Hints","body":"The code lacks type annotations, making it harder to maintain.","fix":"Add standard type hints to all function signatures.","line_hint":"def process_user_data(users):"},{"severity":"info","title":"Inefficient Counter","body":"Manually incrementing a total variable in a loop is non-idiomatic.","fix":"Use the len() function directly.","line_hint":"total = total + 1"}]);
+    if (systemPrompt.includes('Edge-Case')) return JSON.stringify([{"severity":"critical","title":"O(N^2) Lookup","body":"The nested loop causes quadratic time complexity, risking system freezes.","fix":"Use a dictionary/hash map.","line_hint":"for i in range(len(user_list)):"},{"severity":"warning","title":"Missing Key Risk","body":"Accessing user['age'] without checking will throw a KeyError if malformed.","fix":"Use user.get('age', 0).","line_hint":"if user['age'] > 18:"}]);
+    if (systemPrompt.includes('Proposition')) return "The O(N^2) lookup is a critical vulnerability that will degrade performance linearly with user growth.";
+    if (systemPrompt.includes('Critique')) return "I validate this finding. A hash map implementation is necessary to bring this to O(1) time complexity.";
+    if (systemPrompt.includes('VERDICT:')) return 'VERDICT: include. This is a severe performance bottleneck. CODE SCORE: 65/100.';
+    if (systemPrompt.includes('Senior Reviewer')) return "The code requires immediate optimization for time complexity in the lookup function. Refactoring the nested loops and adding error handling will stabilize the build.";
+    return "Analysis generated.";
+  }
+
+  // Real fetch execution
+  const response = await fetch(API_URL, {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${API_KEY}`
+    },
+    body: JSON.stringify({
+      model: API_MODEL,
+      max_tokens: 1000,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMsg }
+      ]
+    })
+  });
+  
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${response.status}`);
+  }
+  
+  const data = await response.json();
+  if (data.choices && data.choices.length > 0 && data.choices[0].message) {
+    return data.choices[0].message.content;
+  }
+  if (data.content && Array.isArray(data.content)) {
+    return data.content.map(b => b.text || '').join('');
+  }
+  return "";
+}
+
+// ─────────────────────────────────────────────
+// Main pipeline
+// ─────────────────────────────────────────────
+async function runPipeline() {
+  if (running) return;
+  const code = document.getElementById('codeInput').value.trim();
+  if (!code) { toast('Please paste some code first.', 'error'); return; }
+  if (!activeAgents.quality && !activeAgents.edge) {
+    toast('Enable at least one analysis agent.', 'error'); return;
+  }
+
+  running = true;
+  findings = []; debateLog = [];
+  counts = { critical:0, warning:0, info:0, passed:0 };
+
+  const lang = document.getElementById('langSel').value;
+  const depth = document.getElementById('depthSel').value;
+
+  // Reset UI
+  resetUIOnly();
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('runBtn').classList.add('running');
+  document.getElementById('runBtnText').textContent = 'Pipeline Running…';
+  document.getElementById('resetBtn').style.display = 'none';
+
+  try {
+    // ── Phase 1: Manager ────────────────────────
+    setProgress(8);
+    if (activeAgents.manager) {
+      setAgentState('manager', 'thinking');
+      const managerPrompt = `You are the Manager Agent in a multi-agent code review system. Your job is to briefly describe how you will orchestrate the analysis of the submitted code. Be concise (2-3 sentences max). Mention the language detected, the key areas you're routing to specialized agents, and the depth of review. Write in first-person, present tense, conversational tone — no bullet points.`;
+      const managerReply = await callDynamicAPI(managerPrompt,
+        `Code submitted for review (${lang}, ${depth} mode):\n\`\`\`${lang}\n${code}\n\`\`\``);
+      await streamToAgent('manager', managerReply.trim());
+      setAgentState('manager', 'done');
+    }
+    setProgress(20);
+
+    // ── Phase 2: Quality & Edge (parallel) ─────
+    let qualityRaw = '', edgeRaw = '';
+    const parallelTasks = [];
+
+    if (activeAgents.quality) {
+      setAgentState('quality', 'thinking');
+      document.getElementById('out-quality').innerHTML = '<span class="placeholder">Scanning code quality…</span>';
+      parallelTasks.push(
+        callDynamicAPI(
+          `You are the Code Quality & Standards Agent. Analyze the ${lang} code for: style guide violations, anti-patterns, algorithmic complexity issues (Big-O), dead code, readability, and maintainability. Respond ONLY with a JSON array of findings. Each finding: {"severity":"critical|warning|info|passed","title":"short title","body":"detailed explanation (2-3 sentences)","fix":"one-line fix suggestion","line_hint":"brief indication of where in code"}. Return 3-5 findings. Return ONLY valid JSON array, no markdown.`,
+          `\`\`\`${lang}\n${code}\n\`\`\``
+        ).then(r => { qualityRaw = r; })
+      );
+    }
+
+    if (activeAgents.edge) {
+      setAgentState('edge', 'thinking');
+      document.getElementById('out-edge').innerHTML = '<span class="placeholder">Scanning for edge cases…</span>';
+      parallelTasks.push(
+        callDynamicAPI(
+          `You are the Edge-Case & Bug Finder Agent. Analyze the ${lang} code for: null/undefined dereferences, unhandled exceptions, off-by-one errors, infinite loops, uninitialized variables, missing return paths, and runtime crash risks. Respond ONLY with a JSON array of findings. Each finding: {"severity":"critical|warning|info|passed","title":"short title","body":"detailed explanation (2-3 sentences)","fix":"one-line fix suggestion","line_hint":"brief indication of where in code"}. Return 3-5 findings. Return ONLY valid JSON array, no markdown.`,
+          `\`\`\`${lang}\n${code}\n\`\`\``
+        ).then(r => { edgeRaw = r; })
+      );
+    }
+
+    await Promise.all(parallelTasks);
+    setProgress(55);
+
+    // Parse results
+    const qualityFindings = parseFindings(qualityRaw, 'Quality Agent');
+    const edgeFindings = parseFindings(edgeRaw, 'Edge Agent');
+
+    if (activeAgents.quality) {
+      await streamToAgent('quality', `Scanned ${qualityFindings.length} findings: ${qualityFindings.map(f=>'['+f.severity.toUpperCase()+'] '+f.title).join(' · ')}`);
+      setAgentState('quality', 'done');
+    }
+    if (activeAgents.edge) {
+      await streamToAgent('edge', `Scanned ${edgeFindings.length} risks: ${edgeFindings.map(f=>'['+f.severity.toUpperCase()+'] '+f.title).join(' · ')}`);
+      setAgentState('edge', 'done');
+    }
+
+    const allSubFindings = [...qualityFindings, ...edgeFindings];
+
+    // ── Phase 3: Debate ─────────────────────────
+    setProgress(65);
+    document.getElementById('roundBadge').textContent = 'Round 1';
+
+    if (allSubFindings.length > 0 && (activeAgents.quality || activeAgents.edge)) {
+      const topFinding = allSubFindings[0];
+      const debateSummary = allSubFindings.slice(0,4).map(f=>`[${f.severity}] ${f.title}: ${f.body}`).join('\n');
+
+      // Proposition
+      const propEl = document.getElementById('dmsg-prop');
+      propEl.classList.add('active');
+      const propReply = await callDynamicAPI(
+        `You are the Quality Agent in a debate. State clearly in 1-2 sentences why the top finding "${topFinding.title}" (${topFinding.severity}) is a legitimate issue worth including in the final report. Be direct and technical.`,
+        `Finding details: ${topFinding.body}\nOther findings for context:\n${debateSummary}`
+      );
+      await streamText('d-prop-text', propReply.trim());
+      debateLog.push({ role:'Quality · Proposition', text: propReply.trim() });
+
+      // Critique
+      const critEl = document.getElementById('dmsg-crit');
+      critEl.classList.add('active');
+      const critReply = await callDynamicAPI(
+        `You are the Edge-Case Agent in a peer-review debate. The Quality Agent proposed: "${propReply.trim()}". Either: (a) validate the finding with a concrete risk example, or (b) flag it as a false positive with reasoning. Be concise (1-2 sentences).`,
+        `Code:\n\`\`\`${lang}\n${code}\n\`\`\``
+      );
+      await streamText('d-crit-text', critReply.trim());
+      debateLog.push({ role:'Edge · Critique', text: critReply.trim() });
+
+      // Synthesis
+      const synthEl = document.getElementById('dmsg-synth');
+      synthEl.classList.add('active');
+      if (activeAgents.senior) {
+        setAgentState('senior', 'thinking');
+        document.getElementById('out-senior').innerHTML = '<span class="placeholder">Synthesizing debate…</span>';
+      }
+      const synthReply = await callDynamicAPI(
+        `You are the Senior Reviewer. Based on this debate, make a final call in 1-2 sentences: should "${topFinding.title}" be included in the report? Also give a score 0-100 for overall code quality. Format: "VERDICT: [include/exclude]. [reason]. CODE SCORE: [N]/100."`,
+        `Proposition: ${propReply.trim()}\nCritique: ${critReply.trim()}`
+      );
+      await streamText('d-synth-text', synthReply.trim());
+      debateLog.push({ role:'Senior · Synthesis', text: synthReply.trim() });
+    }
+    setProgress(78);
+
+    // ── Phase 4: Senior Synthesis ───────────────
+    if (activeAgents.senior) {
+      const allFindings = allSubFindings.map(f=>`[${f.severity.toUpperCase()}] ${f.title}: ${f.body}`).join('\n');
+      const seniorReply = await callDynamicAPI(
+        `You are the Senior Reviewer Agent. You've received findings from sub-agents. Write a 2-3 sentence executive summary of the code quality, the most critical issue to fix first, and overall developer guidance. Be direct and actionable.`,
+        `Sub-agent findings:\n${allFindings || 'No findings submitted.'}\n\nCode:\n\`\`\`${lang}\n${code}\n\`\`\``
+      );
+      await streamToAgent('senior', seniorReply.trim());
+      setAgentState('senior', 'done');
+    }
+    setProgress(90);
+
+    // ── Phase 5: Render report ──────────────────
+    allSubFindings.forEach(f => addFinding(f));
+    renderMetrics(lang, allSubFindings);
+    renderDebateLog();
+    setProgress(100);
+
+    document.getElementById('resetBtn').style.display = 'block';
+    if(API_KEY === "YOUR_API_KEY_HERE" || !API_KEY) {
+       toast(`Mock analysis complete. Add your API key to run live reviews.`);
+    } else {
+       toast(`Analysis complete — ${allSubFindings.length} findings across all agents.`);
+    }
+
+  } catch(err) {
+    console.error(err);
+    toast('API error: ' + err.message, 'error');
+    ['manager','quality','edge','senior'].forEach(id => setAgentState(id, 'idle'));
+  } finally {
+    // ── CRITICAL FIX ──────────────────────────────
+    // The finally block guarantees locks are cleared 
+    // even if the API structurally fails in the catch
+    running = false;
+    document.getElementById('runBtn').disabled = false;
+    document.getElementById('runBtn').classList.remove('running');
+    document.getElementById('runBtnText').textContent = 'Launch AI Pipeline';
+  }
+}
+
+// Stream text into a div by id
+function streamText(elId, text) {
+  const el = document.getElementById(elId);
+  el.textContent = '';
+  let i = 0;
+  const cursor = document.createElement('span');
+  cursor.className = 'typing-cursor';
+  el.appendChild(cursor);
+  return new Promise(resolve => {
+    function next() {
+      if (i < text.length) {
+        cursor.insertAdjacentText('beforebegin', text[i++]);
+        setTimeout(next, 14);
+      } else { cursor.remove(); resolve(); }
+    }
+    next();
+  });
+}
+
+function parseFindings(raw, source) {
+  try {
+    const cleaned = raw.replace(/```json|```/g,'').trim();
+    const arr = JSON.parse(cleaned);
+    return (Array.isArray(arr) ? arr : []).map(f => ({ ...f, source }));
+  } catch { return []; }
+}
+
+// ─────────────────────────────────────────────
+// Report rendering
+// ─────────────────────────────────────────────
+function addFinding(f) {
+  findings.push(f);
+  const sev = (f.severity || 'info').toLowerCase();
+  if (counts[sev] !== undefined) counts[sev]++;
+  else counts.info++;
+  rerenderFindings();
+}
+
+function rerenderFindings() {
+  const body = document.getElementById('reportBody');
+  const summaryBar = document.getElementById('summaryBar');
+  summaryBar.style.display = 'grid';
+  ['critical','warning','info','passed'].forEach(k => {
+    document.getElementById('cnt-'+k).textContent = counts[k] || 0;
+  });
+
+  body.innerHTML = '';
+  findings.forEach((f,i) => {
+    const sev = (f.severity||'info').toLowerCase();
+    const card = document.createElement('div');
+    card.className = `finding-card fc-${sev}`;
+    card.innerHTML = `
+      <div class="finding-head" onclick="toggleFinding(this)">
+        <span class="finding-badge fb-${sev}">${sev}</span>
+        <span class="finding-title">${f.title || 'Unnamed finding'}</span>
+        <span class="finding-agent">${f.source || ''}</span>
+        <span class="finding-expand">▼</span>
+      </div>
+      <div class="finding-body">
+        <div>${f.body || ''}</div>
+        ${f.fix ? `<div class="finding-code">💡 Fix: ${f.fix}</div>` : ''}
+        ${f.line_hint ? `<div style="margin-top:6px; font-size:0.62rem; color:var(--text-muted)">📍 ${f.line_hint}</div>` : ''}
+      </div>
+    `;
+    body.appendChild(card);
+  });
+}
+
+function toggleFinding(headEl) {
+  headEl.closest('.finding-card').classList.toggle('open');
+}
+
+function renderDebateLog() {
+  const body = document.getElementById('debateLogBody');
+  if (!debateLog.length) {
+    body.innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div>No debate recorded.</div>';
+    return;
+  }
+  body.innerHTML = '';
+  debateLog.forEach(d => {
+    const cls = d.role.includes('Quality') ? 'dl-quality' : d.role.includes('Edge') ? 'dl-edge' : 'dl-senior';
+    const div = document.createElement('div');
+    div.style.cssText = 'padding:10px; border-bottom:1px solid var(--rule); font-size:0.68px; line-height:1.7;';
+    div.innerHTML = `<div class="${cls}" style="font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px;">${d.role}</div><div style="font-size:0.68rem; color:var(--text-secondary); font-family:DM Mono,monospace;">${d.text}</div>`;
+    body.appendChild(div);
+  });
+}
+
+function renderMetrics(lang, allFindings) {
+  const body = document.getElementById('metricsBody');
+  const total = allFindings.length;
+  const crit = allFindings.filter(f=>(f.severity||'').toLowerCase()==='critical').length;
+  const warn = allFindings.filter(f=>(f.severity||'').toLowerCase()==='warning').length;
+  const pass = allFindings.filter(f=>(f.severity||'').toLowerCase()==='passed').length;
+  const score = Math.max(0, Math.min(100, Math.round(100 - crit*20 - warn*8 + pass*5)));
+  const scoreColor = score > 70 ? '#16a34a' : score > 45 ? '#d97706' : '#dc2626';
+
+  body.innerHTML = `
+    <div class="metrics-grid">
+      <div class="metric-card" style="grid-column:1/-1">
+        <div class="metric-title">Code Health Score</div>
+        <div class="metric-value" style="color:${scoreColor}">${score}<span style="font-size:1rem; color:var(--text-muted)">/100</span></div>
+        <div class="metric-bar"><div class="metric-fill" style="width:${score}%; background:${scoreColor}"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">Total Findings</div>
+        <div class="metric-value">${total}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">Agents Active</div>
+        <div class="metric-value">${Object.values(activeAgents).filter(Boolean).length}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">Critical Issues</div>
+        <div class="metric-value" style="color:var(--danger)">${crit}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">Debate Rounds</div>
+        <div class="metric-value" style="color:var(--senior-a)">1</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">Language</div>
+        <div class="metric-value" style="font-size:1.1rem">${lang}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">Depth</div>
+        <div class="metric-value" style="font-size:1.1rem; text-transform:capitalize">${document.getElementById('depthSel').value}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ─────────────────────────────────────────────
+// Tabs
+// ─────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.rtab').forEach((el,i) => {
+    el.classList.toggle('active', ['findings','debate','metrics'][i] === tab);
+  });
+  ['rfindings','rdebate','rmetrics'].forEach(id => {
+    const m = id.replace('r','');
+    document.getElementById(id).classList.toggle('active', m === tab);
+  });
+}
+
+// ─────────────────────────────────────────────
+// Reset
+// ─────────────────────────────────────────────
+function resetUIOnly() {
+  ['manager','quality','edge','senior'].forEach(id => {
+    setAgentState(id, 'idle');
+    const el = document.getElementById('out-' + id);
+    if (el) el.innerHTML = '<span class="placeholder">Waiting...</span>';
+  });
+  ['prop','crit','synth'].forEach(s => {
+    const el = document.getElementById('dmsg-' + s);
+    if (el) el.classList.remove('active');
+  });
+  document.getElementById('d-prop-text').textContent = 'Waiting for findings…';
+  document.getElementById('d-crit-text').textContent = 'Waiting for proposition…';
+  document.getElementById('d-synth-text').textContent = 'Awaiting debate…';
+  document.getElementById('roundBadge').textContent = 'Round 0';
+  document.getElementById('summaryBar').style.display = 'none';
+  document.getElementById('reportBody').innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div>No findings yet.<br>Launch the pipeline to begin<br>AI-powered code analysis.</div>';
+  document.getElementById('debateLogBody').innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div>Debate log will appear here.</div>';
+  document.getElementById('metricsBody').innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div>Metrics will appear after analysis.</div>';
+  setProgress(0);
+}
+
+function resetAll() {
+  if (running) return;
+  findings = []; debateLog = [];
+  counts = { critical:0, warning:0, info:0, passed:0 };
+  resetUIOnly();
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('runBtnText').textContent = 'Launch AI Pipeline';
+  document.getElementById('resetBtn').style.display = 'none';
+}
+</script>
+</body>
+</html>
